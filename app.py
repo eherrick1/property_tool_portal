@@ -21,6 +21,7 @@ from flask import (Flask, redirect, render_template_string, request, session,
                    url_for)
 
 import settings_page
+import shared_settings
 
 # IMPORTANT: each URL here must match that app's own BASE_URL env var exactly.
 #
@@ -129,7 +130,7 @@ PUBLIC_PAGE = """<!doctype html>
   <a class="row" href="{{ incident_url }}">""" + ICON_ALERT + """
     <div><h2>Incident Reports</h2>
     <p>Report a guest injury or property damage. Reviewed before anything is filed.</p></div></a>
-  <footer>Questions: Edward Herrick &middot; <a href="/admin">Admin</a></footer>
+  <footer>{% if contact %}Questions: {{ contact }} &middot; {% endif %}<a href="/admin">Admin</a></footer>
 </div></body></html>"""
 
 LOGIN_PAGE = """<!doctype html>
@@ -146,6 +147,7 @@ LOGIN_PAGE = """<!doctype html>
     <input id="pw" name="password" type="password" autofocus autocomplete="current-password">
     <button type="submit">Sign in</button>
   </form>
+  <p class="reveal"><a href="/admin/forgot">Forgot password?</a></p>
   <footer><a href="/">Back to tools</a></footer>
 </div></body></html>"""
 
@@ -277,7 +279,8 @@ def _admin_targets():
 @app.get("/")
 def index():
     return render_template_string(PUBLIC_PAGE, company=COMPANY, capital_url=CAPITAL_URL,
-                                  expense_url=EXPENSE_URL, incident_url=INCIDENT_URL)
+                                  expense_url=EXPENSE_URL, incident_url=INCIDENT_URL,
+                                  contact=shared_settings.get("portal", "contact_name", ""))
 
 
 @app.route("/admin", methods=["GET", "POST"])

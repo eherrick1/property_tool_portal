@@ -11,9 +11,13 @@ The same file is copied into each tool's repo. Keep the copies identical.
 Document shape (every key optional):
 
     email:    {send_via: "outlook" | "service", from_address, from_name, reply_to}
-    capital:  {approver_name, approver_email, approval_copies: [..]}
-    expense:  {approver_name, approver_email, review_cc: [..], approved_copies: [..]}
+    portal:   {contact_name, admin_email, reset_email}
+    capital:  {approver_name, approver_email, approval_copies: [..], signature}
+    expense:  {approver_name, approver_email, review_cc: [..], approved_copies: [..], signature}
     incident: {approver_name, approver_email, cc: [..], carrier_email}
+
+`signature` is "uploaded" (image in property_tools/signature_<tool>) or
+"none" (typed name). Absent means the tool's own SIGNATURE_PATH / file.
 
 "service" sends through Resend's HTTP API with the RESEND_API_KEY env var on
 each service, so no mailbox, password or Outlook setting is involved.
@@ -152,6 +156,47 @@ def send_via_service(to, subject, html, cc=None, attachments=None):
         detail = e.read().decode("utf-8", "replace")[:300]
         raise RuntimeError(f"email service returned HTTP {e.code}: {detail}") from None
     return True
+
+
+# --- Approval signature ----------------------------------------------------
+
+_sig_cache = {}
+
+
+def signature_override(tool, approver_name):
+    """Which signature image `tool` should stamp on an approval.
+
+    None  -> the Settings page has no say; use the tool's own signature file.
+    ""    -> print the typed name, no image.
+    path  -> a local copy of the uploaded image.
+
+    An uploaded image is only used while it belongs to the current approver,
+    so changing the approver can never put the new name next to the old
+    person's signature.
+    """
+    mode = get(tool, "signature")
+    if mode is None:
+        return None
+    if mode != "uploaded":
+        return ""
+    try:
+        snap = _db().collection(COLLECTION).document(f"signature_{tool}").get()
+        doc = snap.to_dict() if snap.exists else None
+    except Exception as e:
+        print(f"[settings] could not read {tool} signature ({type(e).__name__}); using typed name")
+        return ""
+    if not doc or not doc.get("data") or doc.get("approver_name") != approver_name:
+        return ""
+    key = (tool, doc.get("updated_at"))
+    path = _sig_cache.get(key)
+    if not path or not os.path.exists(path):
+        import tempfile
+        ext = ".png" if doc.get("content_type") == "image/png" else ".jpg"
+        fd, path = tempfile.mkstemp(prefix=f"signature_{tool}_", suffix=ext)
+        with os.fdopen(fd, "wb") as f:
+            f.write(bytes(doc["data"]))
+        _sig_cache[key] = path
+    return path
 
 
 def read_attachment(path, filename=None):
