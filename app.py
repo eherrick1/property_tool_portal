@@ -14,12 +14,13 @@ Env vars:
   INCIDENT_ADMIN_TOKEN / CAPITAL_ADMIN_TOKEN / EXPENSE_ADMIN_TOKEN
                                              each app's ADMIN_TOKEN (optional)
 """
-import hmac
 import os
 import time
 
 from flask import (Flask, redirect, render_template_string, request, session,
                    url_for)
+
+import settings_page
 
 # IMPORTANT: each URL here must match that app's own BASE_URL env var exactly.
 #
@@ -193,7 +194,7 @@ form.row p { margin:0; font-size:.88rem; color:#5b6b7b; }
     <p>Review incident reports, language findings, and approvals.</p></button>
   </form>
 
-  <footer><a href="/">Back to tools</a> &middot; <a href="{{ url_for('admin_logout') }}">Sign out</a></footer>
+  <footer><a href="{{ url_for('settings') }}">Settings</a> &middot; <a href="/">Back to tools</a> &middot; <a href="{{ url_for('admin_logout') }}">Sign out</a></footer>
 </div></body></html>"""
 
 
@@ -294,7 +295,7 @@ def admin():
                 error=("Too many failed attempts from this address. "
                        f"Try again in {_LOGIN_WINDOW // 60} minutes.")), 429
         supplied = request.form.get("password", "")
-        if hmac.compare_digest(supplied, PORTAL_PASSWORD):
+        if settings_page.check_password(supplied, PORTAL_PASSWORD):
             _note_login_success()
             session["portal_admin"] = True
             return redirect(url_for("admin"))
@@ -311,6 +312,13 @@ def admin():
 def admin_logout():
     session.pop("portal_admin", None)
     return redirect(url_for("index"))
+
+
+settings_page.init_app(
+    app, style=STYLE, company=COMPANY, env_password=PORTAL_PASSWORD,
+    tools={"capital": {"base": CAPITAL_URL, "token": CAPITAL_ADMIN_TOKEN},
+           "expense": {"base": EXPENSE_URL, "token": EXPENSE_ADMIN_TOKEN},
+           "incident": {"base": INCIDENT_URL, "token": INCIDENT_ADMIN_TOKEN}})
 
 
 @app.get("/healthz")
